@@ -16,38 +16,40 @@ namespace loglib
     // storing decayed copies in a tuple so we can pass lvalue references
     // to `std::make_format_args` (it requires lvalues).
     template <typename... A>
-    inline std::format_args make_format_args_for(A&&... a)
+    inline std::format_args make_format_args_for(A &&...a)
     {
-        auto copies = std::tuple<std::decay_t<A>...>(std::forward<A>(a)...);
-        return std::apply(
-            [](auto &... items) { return std::make_format_args(items...); },
-            copies
-        );
+        if constexpr ((std::is_lvalue_reference_v<A> && ...))
+        {
+            return std::make_format_args(std::forward<A>(a)...);
+        }
+        else
+        {
+            auto copies = std::tuple<std::decay_t<A>...>(std::forward<A>(a)...);
+            return std::apply([](auto &...items)
+                              { return std::make_format_args(items...); }, copies);
+        }
     }
 
     // Single wrapper: if `fmt` is convertible to `std::format_string<Args...>`
     // then the call is compile-time checked; otherwise we accept a
     // dynamic `std::string_view` format and fall back to runtime checks.
     template <typename Fmt, typename... Args>
-    inline void log(std::source_location loc, Fmt&& fmt, Args&&... args)
+    inline void log(std::source_location loc, Fmt &&fmt, Args &&...args)
     {
         if constexpr (
-            std::is_convertible_v<Fmt, std::format_string<Args...>>
-        )
+            std::is_convertible_v<Fmt, std::format_string<Args...>>)
         {
             log_impl(
                 loc,
                 std::forward<Fmt>(fmt),
-                make_format_args_for(std::forward<Args>(args)...)
-            );
+                make_format_args_for(std::forward<Args>(args)...));
         }
         else
         {
             log_impl(
                 loc,
                 std::string_view(std::forward<Fmt>(fmt)),
-                make_format_args_for(std::forward<Args>(args)...)
-            );
+                make_format_args_for(std::forward<Args>(args)...));
         }
     }
 }
