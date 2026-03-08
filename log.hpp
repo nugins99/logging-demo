@@ -5,11 +5,12 @@
 #include <type_traits>
 #include <tuple>
 #include <utility>
+#include <source_location>
 
 namespace loglib
 {
     // Implemented in log.cpp
-    void log_impl(const char* file, int line, std::string_view fmt, std::format_args args);
+    void log_impl(std::source_location loc, std::string_view fmt, std::format_args args);
 
     // Helper: create `std::format_args` from forwarded arguments by
     // storing decayed copies in a tuple so we can pass lvalue references
@@ -28,15 +29,14 @@ namespace loglib
     // then the call is compile-time checked; otherwise we accept a
     // dynamic `std::string_view` format and fall back to runtime checks.
     template <typename Fmt, typename... Args>
-    inline void log(const char* file, int line, Fmt&& fmt, Args&&... args)
+    inline void log(std::source_location loc, Fmt&& fmt, Args&&... args)
     {
         if constexpr (
             std::is_convertible_v<Fmt, std::format_string<Args...>>
         )
         {
             log_impl(
-                file,
-                line,
+                loc,
                 std::forward<Fmt>(fmt),
                 make_format_args_for(std::forward<Args>(args)...)
             );
@@ -44,8 +44,7 @@ namespace loglib
         else
         {
             log_impl(
-                file,
-                line,
+                loc,
                 std::string_view(std::forward<Fmt>(fmt)),
                 make_format_args_for(std::forward<Args>(args)...)
             );
@@ -57,4 +56,4 @@ namespace loglib
 // Accept zero or more format arguments. The `##__VA_ARGS__` removes the
 // trailing comma when no additional args are passed (works with clang/gcc).
 #define LOG(fmt, ...) \
-    ::loglib::log(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    ::loglib::log(std::source_location::current(), fmt, ##__VA_ARGS__)
